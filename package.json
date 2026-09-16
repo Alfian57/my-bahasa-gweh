@@ -2,9 +2,20 @@
   "name": "my-bahasa-gweh",
   "version": "0.1.0",
   "description": "Install Gading's personal collaborative technical-communication skill for coding agents.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alfian57/my-bahasa-gweh.git"
+  },
+  "homepage": "https://github.com/Alfian57/my-bahasa-gweh#readme",
+  "bugs": {
+    "url": "https://github.com/Alfian57/my-bahasa-gweh/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
-    "my-bahasa-gweh": "./bin/my-bahasa-gweh.js"
+    "my-bahasa-gweh": "bin/my-bahasa-gweh.js"
   },
   "files": [
     "skill",

@@ -19,6 +19,10 @@ The explicit installer copies the bundled skill to `~/.agents/skills/my-bahasa-g
 
 It deliberately does not use an npm lifecycle hook, so installing the package never changes your agent configuration until you run `my-bahasa-gweh install` yourself.
 
+## Release
+
+The first public version is published interactively to create the npm package. Later versions are published from the `v<package-version>` Git tag by GitHub Actions Trusted Publishing. The release workflow verifies that the tag matches `package.json`, runs the test suite, and publishes with OIDC instead of an npm token.
+
 ## Use
 
 Invoke the skill explicitly as `$my-bahasa-gweh`, then provide a PR URL or number if the active branch does not identify one; for other platforms, provide the relevant thread or make its integration available. The local profile installed with the skill is at `references/gading-profile.md`; update it only when you intentionally want to change the voice.
