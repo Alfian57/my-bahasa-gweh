@@ -1,0 +1,5 @@
+interface:
+  display_name: "My Bahasa Gweh"
+  short_description: "Draft collaborative technical messages in Gading's voice"
+policy:
+  allow_implicit_invocation: false

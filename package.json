@@ -1,0 +1,28 @@
+{
+  "name": "my-bahasa-gweh",
+  "version": "0.1.0",
+  "description": "Install Gading's personal collaborative technical-communication skill for coding agents.",
+  "type": "module",
+  "bin": {
+    "my-bahasa-gweh": "./bin/my-bahasa-gweh.js"
+  },
+  "files": [
+    "skill",
+    "bin",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "agent-skill",
+    "code-review",
+    "github",
+    "codex",
+    "opencode",
+    "antigravity"
+  ]
+}
