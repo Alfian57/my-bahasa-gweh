@@ -1,6 +1,6 @@
 # My Bahasa Gweh
 
-`my-bahasa-gweh` is Gading's personal, explicit-only skill for drafting collaborative technical messages in his voice: code reviews, issues, technical threads, design feedback, handoffs, incident updates, meeting preparation, and personal-message rewrites. It accepts GitHub, GitLab, Bitbucket, Gerrit, Azure DevOps, Slack, Teams, Discord, and manually supplied context. It produces drafts only; it never posts a message, submits a review, or approves a PR.
+`my-bahasa-gweh` is Gading's personal, explicit-only skill for drafting collaborative technical messages in his voice: code reviews, issues, technical threads, design feedback, handoffs, incident updates, meeting preparation, and personal-message rewrites. It accepts GitHub, GitLab, Bitbucket, Gerrit, Azure DevOps, Slack, Teams, Discord, and manually supplied context. It always presents a draft first. With separate, explicit confirmation for the exact draft and target, it can post one GitHub comment or reply through `gh`; it never posts automatically, submits a review, or approves a PR.
 
 The versioned skill source lives in `skill/`. The npm installer places it in the agent-specific discovery locations on the user's machine.
 
