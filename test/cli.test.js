@@ -149,7 +149,7 @@ test("CLI binary executes directly as a child process", async () => {
   );
 });
 
-test("runCli export generates .cursorrules, CLAUDE.md, and .windsurfrules", async (t) => {
+test("runCli export generates rules locally and globally", async (t) => {
   const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "export-home-"));
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "export-work-"));
   t.after(async () => {
@@ -160,13 +160,30 @@ test("runCli export generates .cursorrules, CLAUDE.md, and .windsurfrules", asyn
   const outputs = [];
   const capture = (msg) => outputs.push(msg);
 
-  // Run export through CLI
-  await runCli(["export", "--all"], capture, { homeDirectory, workspaceDir });
-
+  // 1. Run local export through CLI
+  await runCli(["export", "--local", "--all"], capture, { homeDirectory, workspaceDir });
   assert.ok(outputs.some((line) => line.includes("Exported AI communication rules")));
   assert.equal(await pathExists(path.join(workspaceDir, ".cursorrules")), true);
   assert.equal(await pathExists(path.join(workspaceDir, "CLAUDE.md")), true);
   assert.equal(await pathExists(path.join(workspaceDir, ".windsurfrules")), true);
+
+  // 2. Run global export through CLI
+  outputs.length = 0;
+  await runCli(["export", "--global"], capture, { homeDirectory, workspaceDir });
+  assert.ok(outputs.some((line) => line.includes("Exported AI communication rules")));
+  assert.equal(await pathExists(path.join(homeDirectory, ".claude", "CLAUDE.md")), true);
+  assert.equal(await pathExists(path.join(homeDirectory, ".cursorrules")), true);
+  assert.equal(
+    await pathExists(path.join(homeDirectory, ".cursor", "rules", "my-bahasa-gweh.mdc")),
+    true,
+  );
+  assert.equal(
+    await pathExists(
+      path.join(homeDirectory, ".codeium", "windsurf", "memories", "global_rules.md"),
+    ),
+    true,
+  );
+  assert.equal(await pathExists(path.join(homeDirectory, ".windsurfrules")), true);
 });
 
 test("runCli profile migrate executes cleanly through CLI router", async (t) => {
@@ -216,8 +233,8 @@ test("exportRules preserves existing project rules in CLAUDE.md and .cursorrules
   const { writeFile, readFile } = await import("node:fs/promises");
   await writeFile(claudePath, "# Important Company Security Rules\n\n- No external network calls", "utf8");
 
-  // Run export specifically targeting claude
-  await exportRules({ workspaceDir, homeDirectory, targets: ["claude"] });
+  // Run export specifically targeting claude in workspace
+  await exportRules({ workspaceDir, homeDirectory, targets: ["claude"], isGlobal: false });
 
   const result = await readFile(claudePath, "utf8");
   assert.match(result, /# Important Company Security Rules/);

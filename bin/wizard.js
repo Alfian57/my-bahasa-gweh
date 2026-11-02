@@ -4,6 +4,7 @@ import path from "node:path";
 import * as readline from "node:readline/promises";
 import { c } from "./colors.js";
 import {
+  exportRules,
   getProfilesDir,
   getUserProfilePath,
   listAvailablePresets,
@@ -401,7 +402,37 @@ export async function runInteractiveWizard({
     output.write(`\n${c.green("✔")} Profil berhasil disimpan di: ${c.bold(c.cyan(targetPath))}\n`);
     output.write(c.dim("Sekarang agen AI Anda akan menggunakan persona baru ini secara otomatis!\n\n"));
 
-    return { targetPath, answers, content: compiledMarkdown };
+    const shouldExportGlobal = await askChoice(
+      rl,
+      output,
+      "Terapkan aturan persona ini secara Global ke Claude Code, Cursor, dan Windsurf sekarang?",
+      [
+        {
+          label: "Ya, ekspor ke semua editor AI secara Global (Rekomendasi - Full Global)",
+          value: true,
+        },
+        { label: "Nanti saja (lewati)", value: false },
+      ],
+      0,
+    );
+
+    let exportedGlobalFiles = [];
+    if (shouldExportGlobal) {
+      exportedGlobalFiles = await exportRules({
+        workspaceDir,
+        homeDirectory,
+        isGlobal: true,
+      });
+      output.write(`\n${c.green("✔")} Berhasil mengaktifkan aturan persona secara Global:\n`);
+      for (const f of exportedGlobalFiles) {
+        output.write(`  ${c.cyan("•")} ${f}\n`);
+      }
+      output.write(
+        c.dim("Aturan persona Anda sekarang aktif di seluruh editor AI pada komputer Anda!\n\n"),
+      );
+    }
+
+    return { targetPath, answers, content: compiledMarkdown, exportedGlobalFiles };
   } finally {
     rl.close();
   }

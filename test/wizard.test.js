@@ -131,7 +131,7 @@ test("runInteractiveWizard executes quickstart setup with mock stream", async (t
     await rm(workspaceDir, { recursive: true, force: true });
   });
 
-  const simulatedInputs = ["2\n", "1\n", "Bima\n", "1\n", "kak\n", "1\n", "1\n"];
+  const simulatedInputs = ["2\n", "1\n", "Bima\n", "1\n", "kak\n", "1\n", "1\n", "1\n"];
   const mockInput = createMockInputStream(simulatedInputs);
 
   let outputText = "";
@@ -226,6 +226,7 @@ test("runInteractiveWizard recovers from invalid input and accepts default enter
     "\n",
     "\n",
     "\n",
+    "\n",
   ];
   const mockInput = createMockInputStream(simulatedInputs);
 
@@ -283,6 +284,7 @@ test("runInteractiveWizard executes full custom English setup with local destina
     "1\n",
     "let me know\n",
     "1\n",
+    "2\n",
     "2\n",
   ];
 

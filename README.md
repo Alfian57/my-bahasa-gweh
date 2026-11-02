@@ -40,8 +40,11 @@ my-bahasa-gweh doctor
 # Configure personal persona with step-by-step interactive wizard
 my-bahasa-gweh wizard
 
-# Export active persona rules to Cursor (.cursorrules), Claude Code (CLAUDE.md), and Windsurf (.windsurfrules)
-my-bahasa-gweh export --all
+# Export active persona rules globally across all projects on your machine (default)
+my-bahasa-gweh export --global
+
+# Or export specifically to current workspace directory
+my-bahasa-gweh export --local
 my-bahasa-gweh export --cursor
 my-bahasa-gweh export --claude
 my-bahasa-gweh export --windsurf

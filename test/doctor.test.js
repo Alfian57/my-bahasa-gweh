@@ -137,3 +137,26 @@ test("checkGlabCli returns valid structure in real environment", async () => {
   assert.equal(typeof result.authenticated, "boolean");
   assert.equal(typeof result.details, "string");
 });
+
+test("doctor detects global AI rule integrations when exported", async (t) => {
+  const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "doc-home-"));
+  t.after(() => rm(homeDirectory, { recursive: true, force: true }));
+
+  await install({ homeDirectory });
+
+  // Initial report before export
+  const reportBefore = await doctor({ homeDirectory });
+  assert.equal(reportBefore.rules.claude.active, false);
+  assert.equal(reportBefore.rules.cursor.active, false);
+  assert.equal(reportBefore.rules.windsurf.active, false);
+
+  // Export globally
+  const { exportRules } = await import("../bin/my-bahasa-gweh.js");
+  await exportRules({ homeDirectory, isGlobal: true });
+
+  // Report after export
+  const reportAfter = await doctor({ homeDirectory });
+  assert.equal(reportAfter.rules.claude.active, true);
+  assert.equal(reportAfter.rules.cursor.active, true);
+  assert.equal(reportAfter.rules.windsurf.active, true);
+});
