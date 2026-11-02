@@ -91,9 +91,28 @@ When drafting messages, the agent dynamically resolves which profile to follow:
 - **GitHub Code Suggestions:** Concrete code fixes (such as typos, naming, or small refactors) can include native GitHub ``````suggestion``` blocks in drafts for one-click commits.
 - **Concise Reviews:** An alternative draft is optional for minor fixes, saving context on larger reviews while keeping multi-perspective options for nuanced topics.
 
-## Release
+## Release Workflow
 
-The first public version is published interactively to create the npm package. Later versions are published from the `v<package-version>` Git tag by GitHub Actions Trusted Publishing. The release workflow verifies that the tag matches `package.json`, runs the test suite, and publishes with OIDC instead of an npm token.
+Releases are published automatically via GitHub Actions with OIDC Trusted Publishing and cryptographic SLSA provenance:
+
+```sh
+# 1. Run tests locally
+npm test
+
+# 2. Trigger automated version bump and release (patch, minor, or major):
+npm run release:patch
+# or: npm run release:minor
+# or: npm run release:major
+```
+
+This automatically:
+1. Bumps `package.json` and `package-lock.json`.
+2. Creates an annotated Git tag `v<version>`.
+3. Pushes the commit and tag to GitHub.
+4. Triggers `.github/workflows/publish.yml`, which:
+   - Validates all 12 test matrix combinations (Ubuntu, Windows, macOS across Node 18, 20, 22, 24).
+   - Publishes the package to npm with `--provenance` via OIDC.
+   - Automatically generates the GitHub Release with detailed changelog notes.
 
 ## Development
 

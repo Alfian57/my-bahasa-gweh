@@ -29,7 +29,10 @@
     "test": "node --test",
     "doctor": "node bin/my-bahasa-gweh.js doctor",
     "wizard": "node bin/my-bahasa-gweh.js wizard",
-    "export": "node bin/my-bahasa-gweh.js export"
+    "export": "node bin/my-bahasa-gweh.js export",
+    "release:patch": "npm version patch && git push origin main --follow-tags",
+    "release:minor": "npm version minor && git push origin main --follow-tags",
+    "release:major": "npm version major && git push origin main --follow-tags"
   },
   "engines": {
     "node": ">=18"
