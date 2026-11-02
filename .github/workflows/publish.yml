@@ -30,4 +30,4 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm pack --dry-run
-      - run: npm publish
+      - run: npm publish --provenance

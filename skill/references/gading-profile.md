@@ -1,3 +1,5 @@
+<!-- schema-version: 1 -->
+<!-- Canonical preset: skill/profiles/gading.md -->
 # Profil komunikasi Gading
 
 ## Tujuan

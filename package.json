@@ -1,7 +1,7 @@
 {
   "name": "my-bahasa-gweh",
-  "version": "0.1.2",
-  "description": "Install Gading's personal collaborative technical-communication skill for coding agents.",
+  "version": "0.2.1",
+  "description": "Customizable collaborative technical-communication skill for coding agents with personal voice and multi-persona profiles.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Alfian57/my-bahasa-gweh.git"
@@ -13,6 +13,8 @@
   "publishConfig": {
     "access": "public"
   },
+  "license": "MIT",
+  "author": "Alfian Gading",
   "type": "module",
   "bin": {
     "my-bahasa-gweh": "bin/my-bahasa-gweh.js"
@@ -20,10 +22,14 @@
   "files": [
     "skill",
     "bin",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "doctor": "node bin/my-bahasa-gweh.js doctor",
+    "wizard": "node bin/my-bahasa-gweh.js wizard",
+    "export": "node bin/my-bahasa-gweh.js export"
   },
   "engines": {
     "node": ">=18"
@@ -32,8 +38,12 @@
     "agent-skill",
     "code-review",
     "github",
+    "gitlab",
     "codex",
     "opencode",
-    "antigravity"
+    "antigravity",
+    "cursor",
+    "claude-code",
+    "windsurf"
   ]
 }
