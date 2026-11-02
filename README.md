@@ -90,9 +90,15 @@ When drafting messages, the agent dynamically resolves which profile to follow:
 - **GitHub:** Post comments and review discussions via `gh pr comment` or `gh api` after explicit user confirmation.
 - **GitLab:** Post merge request notes via `glab mr note` after explicit user confirmation.
 - **Slack / Discord:** Post to channel/thread via webhook payload (`curl`) when incoming webhook URL is supplied in session.
-- **Cursor, Claude Code, Windsurf:** Run `my-bahasa-gweh export --all` to inject persona rules directly into your current project.
+- **Cursor, Claude Code, Windsurf:** Run `my-bahasa-gweh export` to inject persona rules globally across all workspaces on your machine (or `my-bahasa-gweh export --local` for a specific project).
 - **GitHub Code Suggestions:** Concrete code fixes (such as typos, naming, or small refactors) can include native GitHub ``````suggestion``` blocks in drafts for one-click commits.
 - **Concise Reviews:** An alternative draft is optional for minor fixes, saving context on larger reviews while keeping multi-perspective options for nuanced topics.
+
+## Architecture & Dependencies
+
+`my-bahasa-gweh` follows a lean and pragmatic engineering philosophy:
+- **100% Full Global by Default:** Prevents repository pollution by managing agent skills, persona configs, and rule definitions at the system/user level (`~`), with opt-in per-project overrides.
+- **Lean Runtime & Ecosystem Dependencies:** Leverages Node.js standard built-in modules (`node:fs/promises`, `node:path`, `node:readline`, `node:test`) complemented by focused, lightweight packages like [`picocolors`](https://github.com/alexeyraspopov/picocolors) for reliable, cross-platform terminal styling across all operating systems.
 
 ## Release Workflow
 
