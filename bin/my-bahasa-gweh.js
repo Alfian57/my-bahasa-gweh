@@ -24,7 +24,7 @@ export function extractProfileSchema(markdownContent) {
 }
 
 export function usage() {
-  return `${c.bold("Usage:")} my-bahasa-gweh <command> [options]
+  return `${c.bold("Usage: my-bahasa-gweh")} <command> [options]
 
 ${c.bold("Commands:")}
   install             Install the skill globally for Codex, OpenCode, and Antigravity

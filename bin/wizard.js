@@ -178,16 +178,21 @@ export async function runInteractiveWizard({
   output = process.stdout,
   homeDirectory = os.homedir(),
   workspaceDir = process.cwd(),
+  rl = null,
 } = {}) {
-  const rl = readline.createInterface({ input, output });
+  rl = rl || readline.createInterface({ input, output });
 
   let interrupted = false;
   const sigintHandler = () => {
     interrupted = true;
     output.write(`\n\n${c.yellow("❌ Setup dibatalkan (interrupted).")}\n`);
-    rl.close();
+    if (typeof rl.close === "function") {
+      rl.close();
+    }
   };
-  rl.on("SIGINT", sigintHandler);
+  if (typeof rl.on === "function") {
+    rl.on("SIGINT", sigintHandler);
+  }
 
   try {
     output.write(`\n${c.bold(c.cyan("======================================================="))}\n`);
@@ -434,6 +439,8 @@ export async function runInteractiveWizard({
 
     return { targetPath, answers, content: compiledMarkdown, exportedGlobalFiles };
   } finally {
-    rl.close();
+    if (typeof rl?.close === "function") {
+      rl.close();
+    }
   }
 }

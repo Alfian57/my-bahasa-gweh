@@ -2,20 +2,22 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { Readable, Writable } from "node:stream";
+import { Writable } from "node:stream";
 import test from "node:test";
 
 import { compileProfile, generateSampleComment, runInteractiveWizard } from "../bin/wizard.js";
 import { pathExists } from "../bin/my-bahasa-gweh.js";
 
-function createMockInputStream(lines) {
-  async function* generator() {
-    for (const line of lines) {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      yield line;
-    }
-  }
-  return Readable.from(generator());
+function createMockRl(inputs) {
+  let idx = 0;
+  return {
+    question: async () => {
+      const line = inputs[idx++] ?? "";
+      return line.replace(/\n$/, "");
+    },
+    close: () => {},
+    on: () => {},
+  };
 }
 
 test("generateSampleComment generates tone-accurate drafts for all variations", () => {
@@ -126,13 +128,14 @@ test("compileProfile outputs comprehensive LLM prompt instructions across langua
 test("runInteractiveWizard executes quickstart setup with mock stream", async (t) => {
   const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "wizard-home-"));
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "wizard-work-"));
+
+  const simulatedInputs = ["2\n", "1\n", "Bima\n", "1\n", "kak\n", "1\n", "1\n", "1\n"];
+  const mockRl = createMockRl(simulatedInputs);
+
   t.after(async () => {
     await rm(homeDirectory, { recursive: true, force: true });
     await rm(workspaceDir, { recursive: true, force: true });
   });
-
-  const simulatedInputs = ["2\n", "1\n", "Bima\n", "1\n", "kak\n", "1\n", "1\n", "1\n"];
-  const mockInput = createMockInputStream(simulatedInputs);
 
   let outputText = "";
   const mockOutput = new Writable({
@@ -143,7 +146,7 @@ test("runInteractiveWizard executes quickstart setup with mock stream", async (t
   });
 
   const result = await runInteractiveWizard({
-    input: mockInput,
+    rl: mockRl,
     output: mockOutput,
     homeDirectory,
     workspaceDir,
@@ -158,14 +161,15 @@ test("runInteractiveWizard executes quickstart setup with mock stream", async (t
 test("runInteractiveWizard handles user cancellation gracefully", async (t) => {
   const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "wizard-home-"));
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "wizard-work-"));
+
+  // User selects Quickstart, inputs name, but cancels at preview confirmation (option 2)
+  const simulatedInputs = ["2\n", "1\n", "CancelUser\n", "1\n", "kak\n", "2\n"];
+  const mockRl = createMockRl(simulatedInputs);
+
   t.after(async () => {
     await rm(homeDirectory, { recursive: true, force: true });
     await rm(workspaceDir, { recursive: true, force: true });
   });
-
-  // User selects Quickstart, inputs name, but cancels at preview confirmation (option 2)
-  const simulatedInputs = ["2\n", "1\n", "CancelUser\n", "1\n", "kak\n", "2\n"];
-  const mockInput = createMockInputStream(simulatedInputs);
 
   let outputText = "";
   const mockOutput = new Writable({
@@ -176,7 +180,7 @@ test("runInteractiveWizard handles user cancellation gracefully", async (t) => {
   });
 
   const result = await runInteractiveWizard({
-    input: mockInput,
+    rl: mockRl,
     output: mockOutput,
     homeDirectory,
     workspaceDir,
@@ -193,10 +197,6 @@ test("runInteractiveWizard handles user cancellation gracefully", async (t) => {
 test("runInteractiveWizard recovers from invalid input and accepts default enter keys", async (t) => {
   const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "wizard-home-"));
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "wizard-work-"));
-  t.after(async () => {
-    await rm(homeDirectory, { recursive: true, force: true });
-    await rm(workspaceDir, { recursive: true, force: true });
-  });
 
   // Inputs:
   // 1. Invalid input "99", then invalid "abc", then default "\n" (chooses option 1: Full Custom)
@@ -211,6 +211,7 @@ test("runInteractiveWizard recovers from invalid input and accepts default enter
   // 10. Default custom phrases "\n" (empty)
   // 11. Confirm "\n" (default 1: Ya)
   // 12. Target location "\n" (default 1: global)
+  // 13. Export global "\n" (default 1: Ya)
   const simulatedInputs = [
     "99\n",
     "abc\n",
@@ -228,7 +229,12 @@ test("runInteractiveWizard recovers from invalid input and accepts default enter
     "\n",
     "\n",
   ];
-  const mockInput = createMockInputStream(simulatedInputs);
+  const mockRl = createMockRl(simulatedInputs);
+
+  t.after(async () => {
+    await rm(homeDirectory, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  });
 
   let outputText = "";
   const mockOutput = new Writable({
@@ -239,7 +245,7 @@ test("runInteractiveWizard recovers from invalid input and accepts default enter
   });
 
   const result = await runInteractiveWizard({
-    input: mockInput,
+    rl: mockRl,
     output: mockOutput,
     homeDirectory,
     workspaceDir,
@@ -254,10 +260,6 @@ test("runInteractiveWizard recovers from invalid input and accepts default enter
 test("runInteractiveWizard executes full custom English setup with local destination", async (t) => {
   const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "wizard-home-"));
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "wizard-work-"));
-  t.after(async () => {
-    await rm(homeDirectory, { recursive: true, force: true });
-    await rm(workspaceDir, { recursive: true, force: true });
-  });
 
   // Simulated inputs for Full Custom English:
   // 1. Setup mode: 1 (Full Custom)
@@ -272,6 +274,7 @@ test("runInteractiveWizard executes full custom English setup with local destina
   // 10. Custom phrases: "let me know"
   // 11. Confirm: 1 (Yes)
   // 12. Target location: 2 (Local .my-bahasa.md)
+  // 13. Export global: 2 (No)
   const simulatedInputs = [
     "1\n",
     "Emma\n",
@@ -288,7 +291,12 @@ test("runInteractiveWizard executes full custom English setup with local destina
     "2\n",
   ];
 
-  const mockInput = createMockInputStream(simulatedInputs);
+  const mockRl = createMockRl(simulatedInputs);
+
+  t.after(async () => {
+    await rm(homeDirectory, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  });
 
   let outputText = "";
   const mockOutput = new Writable({
@@ -299,7 +307,7 @@ test("runInteractiveWizard executes full custom English setup with local destina
   });
 
   const result = await runInteractiveWizard({
-    input: mockInput,
+    rl: mockRl,
     output: mockOutput,
     homeDirectory,
     workspaceDir,

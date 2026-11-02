@@ -14,6 +14,7 @@ import {
   pathExists,
   resolveInstallPaths,
   runCli,
+  skillId,
   usage,
 } from "../bin/my-bahasa-gweh.js";
 
@@ -24,7 +25,7 @@ test("runCli displays help usage for --help, -h, help, and empty argv", async ()
   for (const flag of [["--help"], ["-h"], ["help"], []]) {
     outputs.length = 0;
     await runCli(flag, capture);
-    assert.match(outputs[0], /Usage: my-bahasa-gweh/);
+    assert.match(outputs[0], /Usage:.*my-bahasa-gweh/);
     assert.match(outputs[0], /install/);
     assert.match(outputs[0], /update/);
     assert.match(outputs[0], /uninstall/);
@@ -102,19 +103,19 @@ test("runCli executes install, update, and uninstall commands with isolated home
 
   // 1. Run install
   await runCli(["install"], capture, { homeDirectory, workspaceDir });
-  assert.ok(outputs.some((line) => line.includes("Installed my-bahasa-gweh")));
+  assert.ok(outputs.some((line) => line.includes("Installed") && line.includes(skillId)));
   assert.equal(await pathExists(skillPath), true);
   assert.equal(await pathExists(antigravityPath), true);
 
   // 2. Run update
   outputs.length = 0;
   await runCli(["update"], capture, { homeDirectory, workspaceDir });
-  assert.ok(outputs.some((line) => line.includes("Updated my-bahasa-gweh")));
+  assert.ok(outputs.some((line) => line.includes("Updated") && line.includes(skillId)));
 
   // 3. Run profile use
   outputs.length = 0;
   await runCli(["profile", "use", "formal-id"], capture, { homeDirectory, workspaceDir });
-  assert.ok(outputs.some((line) => line.includes("Activated profile 'formal-id'")));
+  assert.ok(outputs.some((line) => line.includes("Activated profile") && line.includes("formal-id")));
 
   // 4. Run uninstall
   outputs.length = 0;
@@ -134,7 +135,7 @@ test("CLI binary executes directly as a child process", async () => {
 
   // 1. Success exit code (0) for --help
   const { stdout } = await execFileAsync(process.execPath, [cliPath, "--help"]);
-  assert.match(stdout, /Usage: my-bahasa-gweh/);
+  assert.match(stdout, /Usage:.*my-bahasa-gweh/);
 
   // 2. Non-zero exit code (1) and stderr output for unknown command
   await assert.rejects(
