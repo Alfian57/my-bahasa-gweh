@@ -17,6 +17,269 @@ export const bundledSkillPath = path.join(packageRoot, "skill");
 
 export const CURRENT_PROFILE_SCHEMA = 1;
 
+export async function getVersion() {
+  try {
+    const pkgPath = path.join(packageRoot, "package.json");
+    const content = await readFile(pkgPath, "utf8");
+    return JSON.parse(content).version || "0.0.0";
+  } catch {
+    return "0.3.1";
+  }
+}
+
+export function compareSemver(v1, v2) {
+  const p1 = (v1 || "0.0.0").replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
+  const p2 = (v2 || "0.0.0").replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const a = p1[i] || 0;
+    const b = p2[i] || 0;
+    if (a < b) return -1;
+    if (a > b) return 1;
+  }
+  return 0;
+}
+
+export async function checkLatestNpmVersion({ timeout = 4000 } = {}) {
+  const currentVersion = await getVersion();
+  try {
+    const { stdout } = await execFileAsync("npm", ["view", skillId, "version"], { timeout });
+    const latestVersion = stdout.trim();
+    const isOutdated = compareSemver(currentVersion, latestVersion) < 0;
+    return { currentVersion, latestVersion, isOutdated };
+  } catch (error) {
+    return { currentVersion, latestVersion: currentVersion, isOutdated: false, error: error.message };
+  }
+}
+
+export async function upgradeCli({
+  homeDirectory = os.homedir(),
+  force = false,
+  input = process.stdin,
+  output = console.log,
+  rl = null,
+} = {}) {
+  output(c.dim("Memeriksa npm registry untuk versi terbaru..."));
+  const check = await checkLatestNpmVersion();
+  if (check.error) {
+    output(c.yellow(`⚠ Gagal memeriksa npm registry: ${check.error}`));
+    return { upgraded: false, reason: "network_error" };
+  }
+
+  if (!check.isOutdated && !force) {
+    output(`${c.green("✔")} ${c.bold(skillId)} sudah versi terbaru (v${check.currentVersion}).`);
+    return { upgraded: false, currentVersion: check.currentVersion, latestVersion: check.latestVersion };
+  }
+
+  output(`\nDitemukan versi baru: ${c.green(`v${check.latestVersion}`)} (Versi saat ini: ${c.dim(`v${check.currentVersion}`)}).`);
+
+  let shouldUpgrade = force;
+  if (!shouldUpgrade) {
+    const localRl =
+      rl ||
+      (await import("node:readline/promises")).createInterface({
+        input,
+        output: process.stdout,
+      });
+    try {
+      const promptText = `${c.yellow("?")} Apakah Anda ingin meng-upgrade ${skillId} ke v${check.latestVersion} sekarang? [Y/n]: `;
+      const answer = (await localRl.question(promptText)).trim().toLowerCase();
+      shouldUpgrade = answer === "" || answer === "y" || answer === "yes";
+    } finally {
+      if (!rl && typeof localRl?.close === "function") {
+        localRl.close();
+      }
+    }
+  }
+
+  if (!shouldUpgrade) {
+    output(c.yellow("Upgrade dibatalkan oleh pengguna."));
+    return { upgraded: false, reason: "user_cancelled" };
+  }
+
+  output(`\n${c.cyan("[1/2]")} Mengunduh dan memperbarui CLI global via npm...`);
+  await execFileAsync("npm", ["install", "-g", `${skillId}@latest`]);
+  output(`  ${c.green("✔")} npm install -g ${skillId}@latest berhasil.`);
+
+  output(`${c.cyan("[2/2]")} Menyinkronkan berkas skill dan tautan Antigravity...`);
+  await update({ homeDirectory });
+  output(`  ${c.green("✔")} Berkas skill dan tautan Antigravity tersinkronisasi.`);
+
+  output(`\n${c.bold(c.green(`🎉 Berhasil memperbarui ${skillId} ke v${check.latestVersion}!`))}`);
+  return { upgraded: true, currentVersion: check.currentVersion, newVersion: check.latestVersion };
+}
+
+export function parseProfileConfig(content = "") {
+  const isEn = /Bahasa Utama:\s*English/i.test(content);
+  const isFormal = /Bahasa Utama:\s*Bahasa Indonesia baku/i.test(content);
+
+  let salutation = "kak";
+  const salutationMatch = content.match(/Sapaan:.*?"([^"]+)"/);
+  if (salutationMatch) {
+    salutation = salutationMatch[1];
+  } else if (/Tanpa sapaan/i.test(content) || /Direct \/ no salutation/i.test(content)) {
+    salutation = "none";
+  }
+
+  let pronoun = isEn ? "I" : "saya";
+  const pronounMatch = content.match(/Kata Ganti:.*?"([^"]+)"/);
+  if (pronounMatch) {
+    pronoun = pronounMatch[1];
+  }
+
+  let directness = "gentle";
+  if (/Lugas dan tegas|Direct and concise/i.test(content)) directness = "direct";
+  else if (/Edukatif|Mentoring/i.test(content)) directness = "mentor";
+  else if (/Ringkas|Concise/i.test(content)) directness = "concise";
+
+  let emoji = "minimal";
+  if (/Dilarang menggunakan emoji|Do not use emojis/i.test(content)) emoji = "none";
+  else if (/Santai dan ekspresif|Natural and friendly/i.test(content)) emoji = "free";
+
+  const suggestions = !/Utamakan penjelasan konseptual daripada memaksakan snippet/i.test(content);
+
+  let customInstructions = "";
+  const instMatch = content.match(/## Aturan dan Kebiasaan Khusus Tambahan\n([\s\S]*?)(?=\n##|$)/);
+  if (instMatch) {
+    customInstructions = instMatch[1].trim();
+  }
+
+  return { isEn, isFormal, salutation, pronoun, directness, emoji, suggestions, customInstructions };
+}
+
+export function generatePreviewScenarios(config) {
+  const { isEn, isFormal, salutation, directness, emoji, suggestions } = config;
+
+  const sapaanPrefix = salutation && salutation !== "none" ? `${salutation}, ` : "";
+  const sapaanSuffix = salutation && salutation !== "none" ? ` ${salutation}` : "";
+  const em = emoji === "none" ? "" : emoji === "free" ? " 🎉" : " 👍";
+
+  if (isEn) {
+    const greeting =
+      salutation && salutation !== "none"
+        ? `Thanks for putting this together, ${salutation}!`
+        : "Thanks for putting this together!";
+    const emEn = emoji === "none" ? "" : " 🎉";
+    const codeBlock = suggestions
+      ? `\n\`\`\`suggestion\nconst timeout = options.timeout ?? 5000;\n\`\`\`\n`
+      : "";
+
+    return [
+      {
+        title: "1. 🔍 Skenario Code Review (Potensi Bug & Edge Case)",
+        text: `${greeting}${emEn}\n\nThe flow looks clean overall. I noticed a potential edge case when options are undefined. What do you think about adding a default fallback?${codeBlock}This will prevent network calls from hanging indefinitely.`,
+      },
+      {
+        title: "2. 🚀 Skenario PR Approval & Apresiasi",
+        text: `Great work${sapaanSuffix}!${emEn}\n\nThe authentication refactor is clean, well-scoped, and the added test coverage gives great confidence. LGTM, ready to merge!`,
+      },
+      {
+        title: "3. ⚠️ Skenario Arsitektur & Performa (Kritik Konstruktif)",
+        text: `Thanks for the updates${sapaanSuffix}.${emEn}\n\nOne architectural point to consider: this query is executed inside a loop, which could trigger an N+1 performance issue if the dataset grows. Could we consider batching or eager loading here?`,
+      },
+      {
+        title: "4. 💬 Skenario Tiket / Issue Triage",
+        text: `Hi${sapaanSuffix}! Thanks for filing this report.\n\nCould you share reproduction steps and the environment/browser version where this occurred? That will help us investigate and patch it quickly.`,
+      },
+    ];
+  }
+
+  if (isFormal) {
+    const codeBlock = suggestions
+      ? `\n\`\`\`suggestion\nconst timeout = options.timeout ?? 5000;\n\`\`\`\n`
+      : "";
+    return [
+      {
+        title: "1. 🔍 Skenario Code Review (Potensi Bug & Edge Case)",
+        text: `Terima kasih atas implementasi perubahan ini. ${sapaanPrefix}mohon mempertimbangkan penambahan nilai default timeout untuk mengantisipasi kondisi ketika opsi tidak terdefinisi:${codeBlock}Langkah ini bertujuan untuk mencegah request tertahan tanpa batas waktu saat network mengalami degradasi.`,
+      },
+      {
+        title: "2. 🚀 Skenario PR Approval & Apresiasi",
+        text: `Perubahan telah ditinjau dan struktur kode tertata dengan sangat baik. Seluruh unit test pendukung juga terkonfirmasi lulus. Tidak ada catatan perbaikan lebih lanjut dari saya, siap untuk dilakukan merge.`,
+      },
+      {
+        title: "3. ⚠️ Skenario Arsitektur & Performa (Kritik Konstruktif)",
+        text: `${sapaanPrefix}terdapat catatan penting mengenai performa pada query di dalam iterasi ini. Implementasi saat ini berpotensi menimbulkan degradasi performa (N+1 query) saat volume data meningkat. Disarankan untuk menggunakan pendekatan eager loading atau batch query.`,
+      },
+      {
+        title: "4. 💬 Skenario Tiket / Issue Triage",
+        text: `Terima kasih atas laporan kendala yang disampaikan. Mohon bantuannya untuk melampirkan log error serta langkah-langkah reproduksi masalah secara lengkap agar dapat kami tindak lanjuti secara akurat.`,
+      },
+    ];
+  }
+
+  // Indonesian Santai / Kolaboratif
+  const codeBlock = suggestions
+    ? `\n\`\`\`suggestion\nconst timeout = options.timeout ?? 5000;\n\`\`\`\n`
+    : "";
+  let reviewBody =
+    "Secara keseluruhan kodenya rapi. Sepertinya ada kemungkinan edge case kalau nilainya undefined. Bagaimana kalau kita tambahkan default fallback:";
+  if (directness === "direct") {
+    reviewBody =
+      "Secara keseluruhan implementasi sesuai. Ada edge case ketika options bernilai undefined yang perlu ditangani:";
+  } else if (directness === "mentor") {
+    reviewBody =
+      "Struktur kodenya rapi dan mudah dipahami. Sedikit catatan arsitektural: jika opsi bernilai undefined, request berisiko menggantung tanpa batas waktu. Sebaiknya kita definisikan default fallback:";
+  } else if (directness === "concise") {
+    reviewBody = "Rapi! Minor edge case fallback:";
+  }
+
+  return [
+    {
+      title: "1. 🔍 Skenario Code Review (Potensi Bug & Edge Case)",
+      text: `Makasih udah implementasi flow ini${sapaanSuffix}!${em}\n\n${reviewBody}${codeBlock}\nBiar aman pas network lagi lambat atau ada payload yang kosong.`,
+    },
+    {
+      title: "2. 🚀 Skenario PR Approval & Apresiasi",
+      text: `Keren banget${sapaanSuffix}! Refactor modul auth ini jadi jauh lebih rapi, terisolasi dengan baik, dan test coverage-nya mantap. Dari saya LGTM, siap merge!${em}`,
+    },
+    {
+      title: "3. ⚠️ Skenario Arsitektur & Performa (Kritik Konstruktif)",
+      text: `Makasih update-nya${sapaanSuffix}!${em}\n\nAda sedikit concern di bagian query fetching dalam loop ini. Khawatir berpotensi N+1 problem pas datanya makin banyak. Mungkin bisa kita pertimbangkan batch query atau eager loading biar lebih hemat resource?`,
+    },
+    {
+      title: "4. 💬 Skenario Tiket / Issue Triage",
+      text: `Halo${sapaanSuffix}! Makasih banyak udah ngelaporin issue ini ya.${em}\n\nBoleh bantu kirimkan repro steps sama versi OS/browser yang dipakai? Biar bisa langsung kami reproduksi dan siapkan fix-nya.`,
+    },
+  ];
+}
+
+export function generateInteractiveDraft(topic, config) {
+  const { isEn, isFormal, salutation, directness, emoji } = config;
+  const sapaanSuffix = salutation && salutation !== "none" ? ` ${salutation}` : "";
+  const sapaanPrefix = salutation && salutation !== "none" ? `${salutation}, ` : "";
+  const em = emoji === "none" ? "" : emoji === "free" ? " 🎉" : " 👍";
+
+  if (isEn) {
+    const mainGreeting =
+      salutation && salutation !== "none"
+        ? `Thanks for working on this, ${salutation}!`
+        : "Thanks for working on this!";
+    return {
+      main: `${mainGreeting}${em}\n\nOverall the logic looks solid. Regarding ${topic}: what do you think about adding a dedicated check or fallback to keep the behavior robust?`,
+      alternative: `Looks clean${sapaanSuffix}! Quick note regarding ${topic}: could we double check this case before merge?`,
+    };
+  }
+
+  if (isFormal) {
+    return {
+      main: `Terima kasih atas pengerjaan perubahan ini. ${sapaanPrefix}mohon mempertimbangkan penyesuaian terkait ${topic} guna menjaga stabilitas sistem dan mencegah potensi degradasi di lingkungan produksi.`,
+      alternative: `Struktur implementasi sudah baik. Sebagai langkah pencegahan, disarankan untuk menambahkan penanganan khusus untuk ${topic}.`,
+    };
+  }
+
+  // Indonesian Santai
+  let mainTone = "Secara keseluruhan kodenya rapi. Sedikit catatan teknis";
+  if (directness === "direct") mainTone = "Secara keseluruhan implementasi sesuai. Perlu disesuaikan";
+  else if (directness === "mentor")
+    mainTone = "Keren, alurnya udah terstruktur dengan baik. Sedikit catatan arsitektural";
+  else if (directness === "concise") mainTone = "Rapi! Catatan ringkas";
+
+  return {
+    main: `Makasih udah beresin bagian ini${sapaanSuffix}!${em}\n\n${mainTone} terkait ${topic}: bagaimana kalau kita tangani ini biar flow kodenya makin aman dan resilien?`,
+    alternative: `Rapi banget${sapaanSuffix}! Sedikit concern di ${topic}, mungkin bisa dicek kembali sebelum merge ya.${em}`,
+  };
+}
+
 export function extractProfileSchema(markdownContent) {
   if (!markdownContent) return 0;
   const match = markdownContent.match(/<!--\s*schema-version:\s*(\d+)\s*-->/);
@@ -29,26 +292,29 @@ export function usage() {
 ${c.bold("Commands:")}
   install             Install the skill globally for Codex, OpenCode, and Antigravity
   update              Update the installed skill to the latest bundled version
+  upgrade             Check npm registry and upgrade CLI to latest version with 1 step
   uninstall           Remove the installed skill and Antigravity symlink
   doctor, status      Check installation status and environment health
+  preview, test       Preview persona drafts across scenarios or test interactively (-i)
   wizard              Interactive wizard to configure your persona step-by-step
   export [options]    Export persona rules globally for Claude Code, Cursor, and Windsurf
   profile <subaction> Manage communication persona profiles
     list              List available profile presets
+    active, current   Show which profile is currently active
     use <preset>      Activate a preset as your personal profile
     init [-i]         Initialize a personal profile (use -i for interactive wizard)
     wizard            Run interactive persona setup wizard
-    show              Show currently active profile and content
+    show              Show currently active profile and full content
     migrate           Migrate/update active profile to latest schema version
 
 ${c.bold("Options:")}
   --global, -g        Export rules globally to user home directory (default)
-  --local, -l         Export rules locally to current workspace directory
-  --force, -f         Overwrite existing skill on install
-  --interactive, -i   Launch interactive wizard for profile init
+  --force, -f         Overwrite existing skill on install / force upgrade
+  --interactive, -i   Launch interactive mode (for preview simulator or profile init)
   --cursor            Export rules specifically for Cursor
   --claude            Export rules specifically for Claude Code
   --windsurf          Export rules specifically for Windsurf
+  -v, --version       Show version number
   --help, -h          Show help message`;
 }
 
@@ -95,21 +361,7 @@ export async function resolveActiveProfile({
   workspaceDir = process.cwd(),
   homeDirectory = os.homedir(),
 } = {}) {
-  // 1. Project level (.my-bahasa.md)
-  const projectProfilePath = path.join(workspaceDir, ".my-bahasa.md");
-  if (await pathExists(projectProfilePath)) {
-    const content = await readFile(projectProfilePath, "utf8");
-    const schemaVersion = extractProfileSchema(content);
-    return {
-      type: "project",
-      name: ".my-bahasa.md",
-      path: projectProfilePath,
-      schemaVersion,
-      isUpToDate: schemaVersion >= CURRENT_PROFILE_SCHEMA,
-    };
-  }
-
-  // 2. User level config (~/.config/my-bahasa-gweh/profile.md)
+  // 1. User level config (~/.config/my-bahasa-gweh/profile.md)
   const userProfilePath = getUserProfilePath(homeDirectory);
   if (await pathExists(userProfilePath)) {
     const content = await readFile(userProfilePath, "utf8");
@@ -123,7 +375,7 @@ export async function resolveActiveProfile({
     };
   }
 
-  // 3. Bundled preset (default.md)
+  // 2. Bundled preset (default.md)
   const defaultPreset = path.join(getProfilesDir(), "default.md");
   if (await pathExists(defaultPreset)) {
     const content = await readFile(defaultPreset, "utf8");
@@ -272,18 +524,17 @@ export function injectRuleBlock(existingContent, ruleBlock) {
 }
 
 export async function exportRules({
-  workspaceDir = process.cwd(),
   homeDirectory = os.homedir(),
   targets = ["cursor", "claude", "windsurf"],
   isGlobal = true,
+  workspaceDir = process.cwd(),
 } = {}) {
   const { active, content } = await profileShow({ workspaceDir, homeDirectory });
   if (!content) {
     throw new Error("Cannot export rules: No active persona profile found.");
   }
 
-  const scopeLabel = isGlobal ? "global user configuration" : "workspace project rules";
-  const header = `# AI Communication Persona Rules\n\n> Auto-generated by my-bahasa-gweh (${scopeLabel}) from active profile [${active.type}: ${active.name}].\n\n`;
+  const header = `# AI Communication Persona Rules\n\n> Auto-generated by my-bahasa-gweh (global user configuration) from active profile [${active.type}: ${active.name}].\n\n`;
   const footer = `\n\n## Delivery and Safety Instructions\n- Always follow the voice, tone, salutation, and review habits specified in this profile.\n- Always present drafts for the user to review first.\n- Never post or submit comments/reviews automatically without explicit confirmation.\n`;
   const ruleDocument = `${header}${content.trim()}${footer}`;
 
@@ -301,38 +552,23 @@ export async function exportRules({
     exportedFiles.push(filePath);
   }
 
-  if (isGlobal) {
-    // 1. Claude Code Global (~/.claude/CLAUDE.md)
-    if (shouldExportAll || targets.includes("claude")) {
-      await writeRuleFile(path.join(homeDirectory, ".claude", "CLAUDE.md"));
-    }
+  // 1. Claude Code Global (~/.claude/CLAUDE.md)
+  if (shouldExportAll || targets.includes("claude")) {
+    await writeRuleFile(path.join(homeDirectory, ".claude", "CLAUDE.md"));
+  }
 
-    // 2. Cursor Global (~/.cursorrules and ~/.cursor/rules/my-bahasa-gweh.mdc)
-    if (shouldExportAll || targets.includes("cursor")) {
-      await writeRuleFile(path.join(homeDirectory, ".cursorrules"));
-      await writeRuleFile(path.join(homeDirectory, ".cursor", "rules", "my-bahasa-gweh.mdc"));
-    }
+  // 2. Cursor Global (~/.cursorrules and ~/.cursor/rules/my-bahasa-gweh.mdc)
+  if (shouldExportAll || targets.includes("cursor")) {
+    await writeRuleFile(path.join(homeDirectory, ".cursorrules"));
+    await writeRuleFile(path.join(homeDirectory, ".cursor", "rules", "my-bahasa-gweh.mdc"));
+  }
 
-    // 3. Windsurf Global (~/.codeium/windsurf/memories/global_rules.md and ~/.windsurfrules)
-    if (shouldExportAll || targets.includes("windsurf")) {
-      await writeRuleFile(
-        path.join(homeDirectory, ".codeium", "windsurf", "memories", "global_rules.md"),
-      );
-      await writeRuleFile(path.join(homeDirectory, ".windsurfrules"));
-    }
-  } else {
-    // Local workspace export
-    if (shouldExportAll || targets.includes("cursor")) {
-      await writeRuleFile(path.join(workspaceDir, ".cursorrules"));
-    }
-
-    if (shouldExportAll || targets.includes("claude")) {
-      await writeRuleFile(path.join(workspaceDir, "CLAUDE.md"));
-    }
-
-    if (shouldExportAll || targets.includes("windsurf")) {
-      await writeRuleFile(path.join(workspaceDir, ".windsurfrules"));
-    }
+  // 3. Windsurf Global (~/.codeium/windsurf/memories/global_rules.md and ~/.windsurfrules)
+  if (shouldExportAll || targets.includes("windsurf")) {
+    await writeRuleFile(
+      path.join(homeDirectory, ".codeium", "windsurf", "memories", "global_rules.md"),
+    );
+    await writeRuleFile(path.join(homeDirectory, ".windsurfrules"));
   }
 
   return exportedFiles;
@@ -549,6 +785,12 @@ export async function runCli(
     return;
   }
 
+  if (command === "--version" || command === "-v" || command === "version") {
+    const version = await getVersion();
+    output(`my-bahasa-gweh v${version}`);
+    return;
+  }
+
   if (command === "install") {
     const { skillPath, antigravityPath } = await install({ homeDirectory, force: isForce });
     output(`${c.green("✔")} Installed ${c.bold(skillId)} at ${c.cyan(skillPath)}`);
@@ -560,6 +802,73 @@ export async function runCli(
     const { skillPath, antigravityPath } = await update({ homeDirectory });
     output(`${c.green("✔")} Updated ${c.bold(skillId)} at ${c.cyan(skillPath)}`);
     output(`${c.green("✔")} Linked Antigravity to ${c.cyan(antigravityPath)}`);
+
+    const npmCheck = await checkLatestNpmVersion({ timeout: 2500 });
+    if (npmCheck.isOutdated) {
+      output(
+        c.yellow(
+          `\nℹ Rilis baru tersedia di npm (v${npmCheck.latestVersion}). Jalankan 'my-bahasa-gweh upgrade' untuk memperbarui CLI.`,
+        ),
+      );
+    }
+    return;
+  }
+
+  if (command === "upgrade") {
+    await upgradeCli({ homeDirectory, force: isForce, output });
+    return;
+  }
+
+  if (
+    command === "preview" ||
+    command === "playground" ||
+    command === "simulate" ||
+    command === "test-persona"
+  ) {
+    const isInteractive = args.includes("--interactive") || args.includes("-i");
+    const { active, content } = await profileShow({ workspaceDir, homeDirectory });
+    const config = parseProfileConfig(content);
+
+    output(
+      c.bold(c.cyan(`=== Persona Preview & Simulator: [${active.type}: ${active.name}] ===`)),
+    );
+    output(c.dim(`Path: ${active.path || "bundled fallback"}\n`));
+
+    const scenarios = generatePreviewScenarios(config);
+    for (const sc of scenarios) {
+      output(c.bold(c.yellow(sc.title)));
+      output(sc.text);
+      output("");
+    }
+
+    if (isInteractive) {
+      output(c.bold(c.magenta("--- Interactive Simulation ---")));
+      const localRl = (await import("node:readline/promises")).createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+      try {
+        const topic = (
+          await localRl.question(
+            `${c.yellow("?")} Masukkan topik atau temuan teknis yang ingin disimulasikan: `,
+          )
+        ).trim();
+        if (topic) {
+          const drafts = generateInteractiveDraft(topic, config);
+          output(`\n${c.bold(c.green("--- Draf Utama (Main Draft) ---"))}`);
+          output(drafts.main);
+          output(`\n${c.bold(c.cyan("--- Draf Alternatif ---"))}`);
+          output(drafts.alternative);
+          output("");
+        }
+      } finally {
+        localRl.close();
+      }
+    } else {
+      output(
+        c.dim("Tip: Jalankan 'my-bahasa-gweh preview -i' untuk mencoba simulasi topik bebas."),
+      );
+    }
     return;
   }
 
@@ -586,8 +895,13 @@ export async function runCli(
   }
 
   if (command === "export") {
-    const isLocal = args.includes("--local") || args.includes("-l");
-    const isGlobal = args.includes("--global") || args.includes("-g") || !isLocal;
+    if (args.includes("--local") || args.includes("-l")) {
+      output(
+        c.yellow(
+          "⚠ Per-project local export is disabled per 100% Full Global Philosophy (Zero Repo Pollution).\n  Exporting globally to user home (~)...",
+        ),
+      );
+    }
     const targets = [];
     if (args.includes("--cursor")) targets.push("cursor");
     if (args.includes("--claude")) targets.push("claude");
@@ -598,20 +912,16 @@ export async function runCli(
       workspaceDir,
       homeDirectory,
       targets,
-      isGlobal,
     });
-    const scopeLabel = isGlobal ? "Global (~)" : "Local Project";
-    output(`${c.green("✔")} Exported AI communication rules [${c.bold(scopeLabel)}]:`);
+    output(`${c.green("✔")} Exported AI communication rules [${c.bold("Global (~)")}]:`);
     for (const f of exported) {
       output(`  ${c.cyan("•")} ${f}`);
     }
-    if (isGlobal) {
-      output(
-        c.dim(
-          "\nRules apply across all projects globally. Use 'export --local' to export to current directory.",
-        ),
-      );
-    }
+    output(
+      c.dim(
+        "\nRules apply across all projects globally (Zero Repo Pollution).",
+      ),
+    );
     return;
   }
 
@@ -622,6 +932,18 @@ export async function runCli(
 
     if (subAction === "wizard" || (subAction === "init" && isInteractive)) {
       await runInteractiveWizard({ homeDirectory, workspaceDir });
+      return;
+    }
+
+    if (subAction === "active" || subAction === "current" || subAction === "status") {
+      const active = await resolveActiveProfile({ workspaceDir, homeDirectory });
+      output(c.bold("Active Persona Profile:"));
+      output(`  Name:           ${c.cyan(active.name)}`);
+      output(`  Type:           [${c.green(active.type)}]`);
+      output(`  Path:           ${active.path || c.dim("none (using bundled fallback)")}`);
+      output(
+        `  Schema Version: v${active.schemaVersion} ${active.isUpToDate ? c.green("✔ (Up to date)") : c.yellow("⚠ (Outdated, run 'profile migrate')")}`,
+      );
       return;
     }
 

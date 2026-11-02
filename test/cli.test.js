@@ -9,12 +9,17 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 import {
+  compareSemver,
   exportRules,
+  generateInteractiveDraft,
+  generatePreviewScenarios,
   injectRuleBlock,
+  parseProfileConfig,
   pathExists,
   resolveInstallPaths,
   runCli,
   skillId,
+  upgradeCli,
   usage,
 } from "../bin/my-bahasa-gweh.js";
 
@@ -32,6 +37,17 @@ test("runCli displays help usage for --help, -h, help, and empty argv", async ()
     assert.match(outputs[0], /doctor/);
     assert.match(outputs[0], /wizard/);
     assert.match(outputs[0], /profile/);
+  }
+});
+
+test("runCli outputs version for --version, -v, and version command", async () => {
+  const outputs = [];
+  const capture = (msg) => outputs.push(msg);
+
+  for (const flag of [["--version"], ["-v"], ["version"]]) {
+    outputs.length = 0;
+    await runCli(flag, capture);
+    assert.match(outputs[0], /^my-bahasa-gweh v\d+\.\d+\.\d+/);
   }
 });
 
@@ -65,7 +81,7 @@ test("runCli throws error when profile use is called without preset name", async
   );
 });
 
-test("runCli executes profile list, profile show, and doctor formatting cleanly", async () => {
+test("runCli executes profile list, profile active, profile show, and doctor formatting cleanly", async () => {
   const outputs = [];
   const capture = (msg) => outputs.push(msg);
 
@@ -73,6 +89,17 @@ test("runCli executes profile list, profile show, and doctor formatting cleanly"
   await runCli(["profile", "list"], capture);
   assert.ok(outputs.some((line) => line.includes("Available Profile Presets:")));
   assert.ok(outputs.some((line) => line.includes("default")));
+
+  // Profile active / current
+  outputs.length = 0;
+  await runCli(["profile", "active"], capture);
+  assert.ok(outputs.some((line) => line.includes("Active Persona Profile:")));
+  assert.ok(outputs.some((line) => line.includes("Name:")));
+  assert.ok(outputs.some((line) => line.includes("Type:")));
+
+  outputs.length = 0;
+  await runCli(["profile", "current"], capture);
+  assert.ok(outputs.some((line) => line.includes("Active Persona Profile:")));
 
   // Profile show
   outputs.length = 0;
@@ -150,7 +177,7 @@ test("CLI binary executes directly as a child process", async () => {
   );
 });
 
-test("runCli export generates rules locally and globally", async (t) => {
+test("runCli export generates rules globally with zero repo pollution", async (t) => {
   const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "export-home-"));
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "export-work-"));
   t.after(async () => {
@@ -161,14 +188,16 @@ test("runCli export generates rules locally and globally", async (t) => {
   const outputs = [];
   const capture = (msg) => outputs.push(msg);
 
-  // 1. Run local export through CLI
+  // 1. Run export with --local flag (should warn and maintain zero repo pollution)
   await runCli(["export", "--local", "--all"], capture, { homeDirectory, workspaceDir });
   assert.ok(outputs.some((line) => line.includes("Exported AI communication rules")));
-  assert.equal(await pathExists(path.join(workspaceDir, ".cursorrules")), true);
-  assert.equal(await pathExists(path.join(workspaceDir, "CLAUDE.md")), true);
-  assert.equal(await pathExists(path.join(workspaceDir, ".windsurfrules")), true);
+  assert.ok(outputs.some((line) => line.includes("Per-project local export is disabled")));
+  // Ensure workspaceDir was NOT polluted
+  assert.equal(await pathExists(path.join(workspaceDir, ".cursorrules")), false);
+  assert.equal(await pathExists(path.join(workspaceDir, "CLAUDE.md")), false);
+  assert.equal(await pathExists(path.join(workspaceDir, ".windsurfrules")), false);
 
-  // 2. Run global export through CLI
+  // 2. Run standard global export through CLI
   outputs.length = 0;
   await runCli(["export", "--global"], capture, { homeDirectory, workspaceDir });
   assert.ok(outputs.some((line) => line.includes("Exported AI communication rules")));
@@ -222,7 +251,7 @@ test("injectRuleBlock inserts markers and preserves surrounding user rules non-d
   assert.doesNotMatch(updatedInjected, /# AI Voice Persona\n/);
 });
 
-test("exportRules preserves existing project rules in CLAUDE.md and .cursorrules", async (t) => {
+test("exportRules preserves existing user rules in global CLAUDE.md and .cursorrules", async (t) => {
   const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "export-home-"));
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "export-work-"));
   t.after(async () => {
@@ -230,16 +259,77 @@ test("exportRules preserves existing project rules in CLAUDE.md and .cursorrules
     await rm(workspaceDir, { recursive: true, force: true });
   });
 
-  const claudePath = path.join(workspaceDir, "CLAUDE.md");
-  const { writeFile, readFile } = await import("node:fs/promises");
+  const { mkdir, writeFile, readFile } = await import("node:fs/promises");
+  const claudeGlobalDir = path.join(homeDirectory, ".claude");
+  await mkdir(claudeGlobalDir, { recursive: true });
+  const claudePath = path.join(claudeGlobalDir, "CLAUDE.md");
   await writeFile(claudePath, "# Important Company Security Rules\n\n- No external network calls", "utf8");
 
-  // Run export specifically targeting claude in workspace
-  await exportRules({ workspaceDir, homeDirectory, targets: ["claude"], isGlobal: false });
+  // Run global export specifically targeting claude
+  await exportRules({ homeDirectory, targets: ["claude"] });
 
   const result = await readFile(claudePath, "utf8");
   assert.match(result, /# Important Company Security Rules/);
   assert.match(result, /<!-- my-bahasa-gweh:start -->/);
   assert.match(result, /AI Communication Persona Rules/);
   assert.match(result, /<!-- my-bahasa-gweh:end -->/);
+});
+
+test("compareSemver compares version numbers accurately", () => {
+  assert.equal(compareSemver("0.3.1", "0.3.2"), -1);
+  assert.equal(compareSemver("0.4.0", "0.3.1"), 1);
+  assert.equal(compareSemver("0.3.1", "0.3.1"), 0);
+  assert.equal(compareSemver("v1.0.0", "0.9.9"), 1);
+  assert.equal(compareSemver("0.3.0", "v0.3.1"), -1);
+});
+
+test("parseProfileConfig, generatePreviewScenarios, and generateInteractiveDraft format drafts accurately", () => {
+  const profileSample = `
+# Profil Komunikasi - TestUser
+## Bahasa dan Sapaan
+- Bahasa Utama: Bahasa Indonesia santai dan kolaboratif.
+- Kata Ganti: "saya"
+- Sapaan: Gunakan sapaan "bro" untuk rekan kerja.
+## Nada dan Gaya Bicara (Voice & Tone)
+- Tingkat Ketegasan: Lugas dan tegas secara teknis.
+- Kebijakan Emoji: Santai dan ekspresif bila membantu kehangatan suasana.
+`;
+
+  const config = parseProfileConfig(profileSample);
+  assert.equal(config.salutation, "bro");
+  assert.equal(config.pronoun, "saya");
+  assert.equal(config.directness, "direct");
+  assert.equal(config.emoji, "free");
+
+  const scenarios = generatePreviewScenarios(config);
+  assert.equal(scenarios.length, 4);
+  assert.match(scenarios[0].text, /bro/);
+  assert.match(scenarios[0].text, /```suggestion/);
+
+  const draft = generateInteractiveDraft("race condition di caching", config);
+  assert.match(draft.main, /race condition di caching/);
+  assert.match(draft.alternative, /race condition di caching/);
+});
+
+test("runCli preview and upgrade commands execute cleanly", async (t) => {
+  const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "preview-home-"));
+  const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "preview-work-"));
+  t.after(async () => {
+    await rm(homeDirectory, { recursive: true, force: true });
+    await rm(workspaceDir, { recursive: true, force: true });
+  });
+
+  const outputs = [];
+  const capture = (msg) => outputs.push(msg);
+
+  // Test preview
+  await runCli(["preview"], capture, { homeDirectory, workspaceDir });
+  assert.ok(outputs.some((line) => line.includes("Persona Preview & Simulator")));
+  assert.ok(outputs.some((line) => line.includes("Skenario Code Review")));
+  assert.ok(outputs.some((line) => line.includes("Skenario PR Approval")));
+
+  // Test upgrade when already up to date
+  outputs.length = 0;
+  await runCli(["upgrade"], capture, { homeDirectory, workspaceDir });
+  assert.ok(outputs.some((line) => line.includes("Memeriksa npm registry")));
 });

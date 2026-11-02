@@ -43,11 +43,12 @@ Key components of the repository:
 
 ## 3. 100% Full Global Philosophy (Zero Repo Pollution)
 
-The core architecture of `my-bahasa-gweh` is **100% Full Global by default**:
+The core architecture of `my-bahasa-gweh` is **100% Full Global (Zero Repo Pollution)**:
 
 1. **Zero Repo Pollution:**
    - Skills, personas, and communication rules must live at the system/user level (`~`), never scattered inside individual code repositories.
-   - Do **NOT** create or commit `.cursorrules`, `.claude/CLAUDE.md`, or `.my-bahasa.md` into project workspaces unless explicitly instructed by the user.
+   - Do **NOT** create or commit `.cursorrules`, `.claude/CLAUDE.md`, or `.my-bahasa.md` into project workspaces.
+   - All rule exports and persona profile configurations are strictly global.
 
 2. **Global Integration Paths Reference:**
    | Tool / Agent | Target System Path | Integration Mechanism |
@@ -59,9 +60,9 @@ The core architecture of `my-bahasa-gweh` is **100% Full Global by default**:
    | **Windsurf** | `~/.codeium/windsurf/memories/global_rules.md`<br/>`~/.windsurfrules` | Non-destructive rule block injection |
    | **User Profiles** | `~/.config/my-bahasa-gweh/profile.md` | Respects `XDG_CONFIG_HOME` |
 
-3. **CLI Default Behavior:**
-   - The CLI command `my-bahasa-gweh export` must **always default to `--global` (`-g`)**.
-   - Per-project export is strictly opt-in via `my-bahasa-gweh export --local` (`-l`).
+3. **CLI Behavior:**
+   - The CLI command `my-bahasa-gweh export` writes only to global user system paths (`~`).
+   - The CLI wizard saves only to the user's global config directory (`~/.config/my-bahasa-gweh/profile.md`).
 
 ---
 

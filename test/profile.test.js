@@ -54,7 +54,7 @@ test("getUserConfigDir respects XDG_CONFIG_HOME for user home directory", () => 
   }
 });
 
-test("cascades profile resolution across all 5 priority levels", async (t) => {
+test("cascades profile resolution strictly globally (Zero Repo Pollution)", async (t) => {
   const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "profile-home-"));
   const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "profile-work-"));
   t.after(async () => {
@@ -62,23 +62,23 @@ test("cascades profile resolution across all 5 priority levels", async (t) => {
     await rm(workspaceDir, { recursive: true, force: true });
   });
 
-  // Priority 3: Fallback bundled preset
+  // Priority 2: Fallback bundled preset
   const presetRes = await resolveActiveProfile({ workspaceDir, homeDirectory });
   assert.equal(presetRes.type, "preset");
   assert.equal(presetRes.name, "default");
 
-  // Priority 2: User-level global profile takes precedence over preset
+  // Priority 1: User-level global profile takes precedence over preset
   await profileUse("tech-en", { homeDirectory });
   const userRes = await resolveActiveProfile({ workspaceDir, homeDirectory });
   assert.equal(userRes.type, "user");
   assert.equal(userRes.path, getUserProfilePath(homeDirectory));
 
-  // Priority 1: Project-level .my-bahasa.md takes precedence over user config
+  // Verify that any rogue local .my-bahasa.md does NOT override user global profile
   const projectProfile = path.join(workspaceDir, ".my-bahasa.md");
-  await writeFile(projectProfile, "# Custom Project Profile");
-  const projectRes = await resolveActiveProfile({ workspaceDir, homeDirectory });
-  assert.equal(projectRes.type, "project");
-  assert.equal(projectRes.path, projectProfile);
+  await writeFile(projectProfile, "# Rogue Project Profile");
+  const postProjectRes = await resolveActiveProfile({ workspaceDir, homeDirectory });
+  assert.equal(postProjectRes.type, "user");
+  assert.equal(postProjectRes.path, getUserProfilePath(homeDirectory));
 });
 
 test("resolveActiveProfile falls back to legacy gading-profile if default.md is absent", async (t) => {

@@ -19,9 +19,8 @@ Draft technical collaboration messages that the user can inspect first. After th
 ## Profile resolution
 
 The skill adapts its persona and voice dynamically by reading the first available communication profile in this order:
-1. **Project profile:** Check `.my-bahasa.md` in the current repository or workspace root.
-2. **User global profile:** Check `~/.config/my-bahasa-gweh/profile.md` (managed via `my-bahasa-gweh profile`).
-3. **Bundled default profile:** Fallback to `profiles/default.md` (or `references/gading-profile.md` if specifically targeted) bundled with the skill.
+1. **User global profile:** Check `~/.config/my-bahasa-gweh/profile.md` (managed via `my-bahasa-gweh profile` and `my-bahasa-gweh wizard`).
+2. **Bundled default profile:** Fallback to `profiles/default.md` (or `references/gading-profile.md` if specifically targeted) bundled with the skill.
 
 ## Gather context
 

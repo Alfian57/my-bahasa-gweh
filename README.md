@@ -31,20 +31,28 @@ my-bahasa-gweh install --force
 # Update installed skill to the latest bundled version
 my-bahasa-gweh update
 
+# Check npm registry and upgrade CLI + skill in 1 step
+my-bahasa-gweh upgrade
+
 # Remove installed skill and Antigravity symlink
 my-bahasa-gweh uninstall
+
+# Check CLI version
+my-bahasa-gweh -v
+my-bahasa-gweh --version
+
+# Preview persona drafts across scenarios or test interactively with custom topic
+my-bahasa-gweh preview
+my-bahasa-gweh preview -i
 
 # Diagnose environment and installation health (checks Node, Skill, Symlink, gh, and glab)
 my-bahasa-gweh doctor
 
-# Configure personal persona with step-by-step interactive wizard
+# Configure personal persona with dynamic interactive wizard
 my-bahasa-gweh wizard
 
 # Export active persona rules globally across all projects on your machine (default)
-my-bahasa-gweh export --global
-
-# Or export specifically to current workspace directory
-my-bahasa-gweh export --local
+my-bahasa-gweh export
 my-bahasa-gweh export --cursor
 my-bahasa-gweh export --claude
 my-bahasa-gweh export --windsurf
@@ -55,9 +63,13 @@ my-bahasa-gweh export --windsurf
 `my-bahasa-gweh` supports dynamic personas so anyone in the community can customize their own tone and style:
 
 ```sh
-# 🧙 Interactive Persona Setup Wizard (Quickstart or Full Custom with Live Preview)
+# 🧙 Interactive Persona Setup Wizard (Full Custom, Archetypes, or Freeform Builder)
 my-bahasa-gweh wizard
 # or: my-bahasa-gweh profile wizard / my-bahasa-gweh profile init -i
+
+# Inspect which profile is currently active
+my-bahasa-gweh profile active
+# or: my-bahasa-gweh profile current
 
 # List available built-in presets
 my-bahasa-gweh profile list
@@ -71,33 +83,32 @@ my-bahasa-gweh profile use tech-en      # English for global open source
 # Initialize a custom personal profile
 my-bahasa-gweh profile init
 
-# View currently active profile and content
+# View currently active profile and full content
 my-bahasa-gweh profile show
 
 # Migrate/update active profile to latest schema version
 my-bahasa-gweh profile migrate
 ```
 
-### Cascading Profile Resolution
+### Profile Resolution (100% Full Global)
 
 When drafting messages, the agent dynamically resolves which profile to follow:
-1. **Project-level profile:** `.my-bahasa.md` in the current workspace or repository root (great for team/repo guidelines).
-2. **User global profile:** `~/.config/my-bahasa-gweh/profile.md` (managed with `my-bahasa-gweh profile use <preset>`).
-3. **Bundled default profile:** `profiles/default.md` (bundled with the skill as fallback).
+1. **User global profile:** `~/.config/my-bahasa-gweh/profile.md` (managed with `my-bahasa-gweh wizard` or `my-bahasa-gweh profile use <preset>`).
+2. **Bundled default profile:** `profiles/default.md` (bundled with the skill as fallback).
 
 ## Multi-Platform Delivery & Integration
 
 - **GitHub:** Post comments and review discussions via `gh pr comment` or `gh api` after explicit user confirmation.
 - **GitLab:** Post merge request notes via `glab mr note` after explicit user confirmation.
 - **Slack / Discord:** Post to channel/thread via webhook payload (`curl`) when incoming webhook URL is supplied in session.
-- **Cursor, Claude Code, Windsurf:** Run `my-bahasa-gweh export` to inject persona rules globally across all workspaces on your machine (or `my-bahasa-gweh export --local` for a specific project).
+- **Cursor, Claude Code, Windsurf:** Run `my-bahasa-gweh export` to inject persona rules globally across all workspaces on your machine.
 - **GitHub Code Suggestions:** Concrete code fixes (such as typos, naming, or small refactors) can include native GitHub ``````suggestion``` blocks in drafts for one-click commits.
 - **Concise Reviews:** An alternative draft is optional for minor fixes, saving context on larger reviews while keeping multi-perspective options for nuanced topics.
 
 ## Architecture & Dependencies
 
 `my-bahasa-gweh` follows a lean and pragmatic engineering philosophy:
-- **100% Full Global by Default:** Prevents repository pollution by managing agent skills, persona configs, and rule definitions at the system/user level (`~`), with opt-in per-project overrides.
+- **100% Full Global (Zero Repo Pollution):** Agent skills, persona configs, and rule definitions live at the system/user level (`~`), completely eliminating repository pollution and extraneous config files in project folders.
 - **Lean Runtime & Ecosystem Dependencies:** Leverages Node.js standard built-in modules (`node:fs/promises`, `node:path`, `node:readline`, `node:test`) complemented by focused, lightweight packages like [`picocolors`](https://github.com/alexeyraspopov/picocolors) for reliable, cross-platform terminal styling across all operating systems.
 
 ## Release Workflow
