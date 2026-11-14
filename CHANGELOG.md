@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/Alfian57/my-bahasa-gweh/compare/my-bahasa-gweh-v0.5.0...my-bahasa-gweh-v0.5.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **release:** validate component-prefixed tags and retries ([f3d03fc](https://github.com/Alfian57/my-bahasa-gweh/commit/f3d03fc364bbe87e0a2e96269d98ee130c5d750f))
+* **release:** validate Release Please tags and retry publication ([#3](https://github.com/Alfian57/my-bahasa-gweh/issues/3)) ([f3d03fc](https://github.com/Alfian57/my-bahasa-gweh/commit/f3d03fc364bbe87e0a2e96269d98ee130c5d750f))
+
 ## [0.5.0](https://github.com/Alfian57/my-bahasa-gweh/compare/my-bahasa-gweh-v0.4.0...my-bahasa-gweh-v0.5.0) (2026-11-14)
 
 
