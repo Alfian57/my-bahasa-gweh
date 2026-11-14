@@ -1,12 +1,13 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -20,12 +21,50 @@ jobs:
         node-version: [18, 20, 22, 24]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ matrix.node-version }}
+          package-manager-cache: false
 
       - run: npm ci
       - run: npm test
       - run: npm pack --dry-run
+
+  package_smoke:
+    name: Installable package smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci
+      - name: Build package tarball
+        id: package
+        run: npm run package
+      - name: Install and smoke-test the tarball
+        env:
+          TARBALL: ${{ steps.package.outputs.tarball }}
+        run: npm run test:package -- "$TARBALL"
+
+  gate:
+    name: CI gate
+    if: always()
+    needs: [test, package_smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all CI jobs to pass
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          PACKAGE_RESULT: ${{ needs.package_smoke.result }}
+        run: |
+          test "$TEST_RESULT" = success
+          test "$PACKAGE_RESULT" = success

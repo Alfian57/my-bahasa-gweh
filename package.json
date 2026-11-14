@@ -11,7 +11,8 @@
     "url": "https://github.com/Alfian57/my-bahasa-gweh/issues"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "license": "MIT",
   "author": "Alfian Gading",
@@ -27,12 +28,11 @@
   ],
   "scripts": {
     "test": "node --test",
+    "package": "node scripts/package.mjs",
+    "test:package": "node scripts/smoke-package.mjs",
     "doctor": "node bin/my-bahasa-gweh.js doctor",
     "wizard": "node bin/my-bahasa-gweh.js wizard",
-    "export": "node bin/my-bahasa-gweh.js export",
-    "release:patch": "npm version patch && git push origin main --follow-tags",
-    "release:minor": "npm version minor && git push origin main --follow-tags",
-    "release:major": "npm version major && git push origin main --follow-tags"
+    "export": "node bin/my-bahasa-gweh.js export"
   },
   "engines": {
     "node": ">=18"
