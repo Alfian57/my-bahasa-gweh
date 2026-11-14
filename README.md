@@ -93,6 +93,7 @@ my-bahasa-gweh profile migrate
 ### Profile Resolution (100% Full Global)
 
 When drafting messages, the agent dynamically resolves which profile to follow:
+
 1. **User global profile:** `~/.config/my-bahasa-gweh/profile.md` (managed with `my-bahasa-gweh wizard` or `my-bahasa-gweh profile use <preset>`).
 2. **Bundled default profile:** `profiles/default.md` (bundled with the skill as fallback).
 
@@ -108,31 +109,15 @@ When drafting messages, the agent dynamically resolves which profile to follow:
 ## Architecture & Dependencies
 
 `my-bahasa-gweh` follows a lean and pragmatic engineering philosophy:
+
 - **100% Full Global (Zero Repo Pollution):** Agent skills, persona configs, and rule definitions live at the system/user level (`~`), completely eliminating repository pollution and extraneous config files in project folders.
 - **Lean Runtime & Ecosystem Dependencies:** Leverages Node.js standard built-in modules (`node:fs/promises`, `node:path`, `node:readline`, `node:test`) complemented by focused, lightweight packages like [`picocolors`](https://github.com/alexeyraspopov/picocolors) for reliable, cross-platform terminal styling across all operating systems.
 
 ## Release Workflow
 
-Releases are published automatically via GitHub Actions with OIDC Trusted Publishing and cryptographic SLSA provenance:
+Releases use Release Please to open a version and changelog PR after conventional commits reach `main`. Merging the release PR creates the GitHub Release and starts `.github/workflows/publish.yml`, which smoke-tests the npm tarball and publishes it through npm Trusted Publishing (OIDC) with provenance. The tested tarball's integrity is checked against npm after publication.
 
-```sh
-# 1. Run tests locally
-npm test
-
-# 2. Trigger automated version bump and release (patch, minor, or major):
-npm run release:patch
-# or: npm run release:minor
-# or: npm run release:major
-```
-
-This automatically:
-1. Bumps `package.json` and `package-lock.json`.
-2. Creates an annotated Git tag `v<version>`.
-3. Pushes the commit and tag to GitHub.
-4. Triggers `.github/workflows/publish.yml`, which:
-   - Validates all 12 test matrix combinations (Ubuntu, Windows, macOS across Node 18, 20, 22, 24).
-   - Publishes the package to npm with `--provenance` via OIDC.
-   - Automatically generates the GitHub Release with detailed changelog notes.
+See [the release guide](docs/releasing.md) for the one-time GitHub App, branch protection and npm Trusted Publisher setup, plus release and recovery steps. No `NPM_TOKEN` is required. Do not create release versions or tags from a developer machine.
 
 ## Development
 

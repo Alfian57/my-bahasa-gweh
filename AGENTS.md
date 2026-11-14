@@ -11,6 +11,7 @@ Every AI agent operating on this codebase **must** read and adhere to these guid
 `my-bahasa-gweh` is a customizable, collaborative technical-communication skill and CLI tool for AI coding agents. It gives agents a natural, personal, authentic communication voice across code reviews, PR comments, issue discussions, incident handoffs, and team chats without sounding like a robotic corporate assistant.
 
 Key components of the repository:
+
 - `bin/my-bahasa-gweh.js`: CLI router and core logic (`install`, `update`, `uninstall`, `export`, `doctor`, `profile`).
 - `bin/wizard.js`: Interactive terminal setup wizard with mockable I/O streams.
 - `bin/colors.js`: High-performance terminal color utility powered by `picocolors`.
@@ -26,6 +27,7 @@ Key components of the repository:
 
 > [!IMPORTANT]
 > **Respect Local Developer Identity:**
+>
 > - Agents must always respect the author and committer configured in the active developer's local git configuration:
 >   ```bash
 >   git config user.name
@@ -51,14 +53,15 @@ The core architecture of `my-bahasa-gweh` is **100% Full Global (Zero Repo Pollu
    - All rule exports and persona profile configurations are strictly global.
 
 2. **Global Integration Paths Reference:**
-   | Tool / Agent | Target System Path | Integration Mechanism |
-   | :--- | :--- | :--- |
-   | **Google Antigravity** | `~/.gemini/config/skills/my-bahasa-gweh` | Symlink / Junction to source skill |
-   | **Codex / OpenCode** | `~/.agents/skills/my-bahasa-gweh` | Canonical shared skill directory |
-   | **Claude Code** | `~/.claude/CLAUDE.md` | Non-destructive rule block injection |
-   | **Cursor** | `~/.cursorrules`<br/>`~/.cursor/rules/my-bahasa-gweh.mdc` | Non-destructive rule block injection |
-   | **Windsurf** | `~/.codeium/windsurf/memories/global_rules.md`<br/>`~/.windsurfrules` | Non-destructive rule block injection |
-   | **User Profiles** | `~/.config/my-bahasa-gweh/profile.md` | Respects `XDG_CONFIG_HOME` |
+
+   | Tool / Agent           | Target System Path                                                    | Integration Mechanism                |
+   | :--------------------- | :-------------------------------------------------------------------- | :----------------------------------- |
+   | **Google Antigravity** | `~/.gemini/config/skills/my-bahasa-gweh`                              | Symlink / Junction to source skill   |
+   | **Codex / OpenCode**   | `~/.agents/skills/my-bahasa-gweh`                                     | Canonical shared skill directory     |
+   | **Claude Code**        | `~/.claude/CLAUDE.md`                                                 | Non-destructive rule block injection |
+   | **Cursor**             | `~/.cursorrules`<br/>`~/.cursor/rules/my-bahasa-gweh.mdc`             | Non-destructive rule block injection |
+   | **Windsurf**           | `~/.codeium/windsurf/memories/global_rules.md`<br/>`~/.windsurfrules` | Non-destructive rule block injection |
+   | **User Profiles**      | `~/.config/my-bahasa-gweh/profile.md`                                 | Respects `XDG_CONFIG_HOME`           |
 
 3. **CLI Behavior:**
    - The CLI command `my-bahasa-gweh export` writes only to global user system paths (`~`).
@@ -83,11 +86,14 @@ When injecting or exporting rules into editor files (such as `~/.claude/CLAUDE.m
 
 ```markdown
 # >>> my-bahasa-gweh >>>
+
 ... generated rules ...
+
 # <<< my-bahasa-gweh <<<
 ```
 
 ### Safety Rules:
+
 - If markers already exist: replace **only** the content between the markers.
 - If markers do not exist: append the marker block cleanly without modifying any existing user rules.
 - Under no circumstances should user-defined rules outside the markers be overwritten or deleted.
@@ -131,36 +137,13 @@ Every modification, bug fix, or new feature must maintain **100% automated test 
 
 ## 7. Release & CI/CD Lifecycle Protocol
 
-Releases must follow an automated, verified, and gated process:
-
-1. **Release Scripts:**
-   Never manually edit `package.json` version and tag ad-hoc. Always use the pre-configured scripts:
-   ```bash
-   # For bug fixes or patch releases:
-   npm run release:patch
-
-   # For new backwards-compatible features:
-   npm run release:minor
-
-   # For breaking changes:
-   npm run release:major
-   ```
-   These scripts update `package.json`, `package-lock.json`, generate git tags, and push upstream with `--follow-tags`.
-
-2. **CI/CD Pipeline (`.github/workflows/publish.yml`):**
-   - Triggered automatically on git tags matching `v*`.
-   - Executes multi-OS matrix tests across all 12 runner combinations before publishing.
-   - Publishes to npm using GitHub Actions OIDC Trusted Publishing with `--provenance`.
-   - Automatically creates GitHub Releases with release notes.
-
-3. **No Premature Local Installations:**
-   - **DO NOT** run `npm install -g my-bahasa-gweh@latest` immediately after pushing a git release tag.
-   - Wait for the GitHub Actions `Publish npm package` workflow to complete successfully.
-   - Wait for npm registry CDN propagation (~15-30 seconds).
-   - Verify registry version before upgrading local environment:
-     ```bash
-     npm view my-bahasa-gweh version
-     ```
+- Follow [`docs/releasing.md`](docs/releasing.md) for release setup, release review and recovery.
+- Use Conventional Commits. Release Please determines patch/minor/major bumps and updates package versions and changelog in a pull request.
+- CI must pass on pull requests to `main`; merge the release PR only after reviewing its generated version and changelog.
+- GitHub Actions publishes the verified tarball through npm Trusted Publishing (OIDC) and verifies npm's SHA-512 integrity. Never use `npm version`, push release tags manually, or run `npm publish` locally.
+- Keep the workflow filename `.github/workflows/publish.yml`; npm Trusted Publisher is configured for `publish.yml`.
+- Use Conventional Commit pull request titles and squash-and-merge only; after merge, verify the worktree and PR head before deleting a local feature branch. GitHub auto-deletes merged remote branches.
+- `RELEASE_PLEASE_APP_ID` and `RELEASE_PLEASE_APP_PRIVATE_KEY` must be configured as a repository variable and secret. Never expose the private key.
 
 ---
 

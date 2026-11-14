@@ -1,68 +1,154 @@
-name: Publish npm package
+name: Release and publish npm package
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
+
+concurrency:
+  group: npm-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  test:
-    name: Test Node ${{ matrix.node-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        node-version: [18, 20, 22, 24]
-
+  release:
+    name: Create or update release PR
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.validate.outputs.version }}
+      dist_tag: ${{ steps.validate.outputs.dist_tag }}
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          node-version: ${{ matrix.node-version }}
+          persist-credentials: false
+      - name: Check Release Please App configuration
+        env:
+          RELEASE_PLEASE_APP_ID: ${{ vars.RELEASE_PLEASE_APP_ID }}
+          RELEASE_PLEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$RELEASE_PLEASE_APP_ID" || -z "$RELEASE_PLEASE_APP_PRIVATE_KEY" ]]; then
+            echo "::error::Configure RELEASE_PLEASE_APP_ID and RELEASE_PLEASE_APP_PRIVATE_KEY in repository Actions settings."
+            exit 1
+          fi
+      - id: app_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        with:
+          token: ${{ steps.app_token.outputs.token }}
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        if: steps.release.outputs.release_created == 'true'
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Validate release metadata
+        id: validate
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/verify-release.mjs
 
-      - run: npm ci
-      - run: npm test
-      - run: npm pack --dry-run
+  retry_info:
+    name: Validate an existing release tag
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      dist_tag: ${{ steps.validate.outputs.dist_tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Require a tag matching package.json
+        id: validate
+        run: node scripts/verify-release.mjs
+
+  verify_retry:
+    name: Re-run CI before retrying publication
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/ci.yml
 
   publish:
-    name: Publish to npm & Create GitHub Release
-    needs: test
+    name: Publish verified tarball to npm
+    needs: [release, retry_info, verify_retry]
+    if: >-
+      always() &&
+      ((needs.release.result == 'success' && needs.release.outputs.release_created == 'true') ||
+      (needs.retry_info.result == 'success' && needs.verify_retry.result == 'success'))
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || needs.release.outputs.tag_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
           package-manager-cache: false
-
-      - name: Verify tag matches package version
-        run: |
-          expected_tag="v$(node -p "require('./package.json').version")"
-          test "$GITHUB_REF_NAME" = "$expected_tag"
-
+      - name: Use npm with Trusted Publishing support
+        run: npm install --global npm@11.16.0
       - run: npm ci
-      - run: npm pack --dry-run
-      - run: npm publish --provenance
-
-      - name: Create GitHub Release
+      - name: Verify release tag and repository
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists, skipping."
-          else
-            gh release create "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
-              --generate-notes \
-              --verify-tag
-          fi
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || needs.release.outputs.tag_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/verify-release.mjs
+      - name: Build release tarball
+        id: package
+        run: npm run package
+      - name: Verify installable release tarball
+        env:
+          TARBALL: ${{ steps.package.outputs.tarball }}
+        run: npm run test:package -- "$TARBALL"
+      - name: Check whether the exact package is already published
+        id: registry
+        env:
+          TARBALL: ${{ steps.package.outputs.tarball }}
+        run: node scripts/check-publication.mjs "$TARBALL"
+      - name: Store release package and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: my-bahasa-gweh-${{ needs.release.outputs.version || needs.retry_info.outputs.version }}
+          path: |
+            ${{ steps.package.outputs.tarball }}
+            ${{ steps.package.outputs.checksum }}
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish with OIDC and provenance
+        if: steps.registry.outputs.publish == 'true'
+        env:
+          TARBALL: ${{ steps.package.outputs.tarball }}
+          DIST_TAG: ${{ needs.release.outputs.dist_tag || needs.retry_info.outputs.dist_tag }}
+        run: npm publish "./$TARBALL" --access public --provenance --ignore-scripts --tag "$DIST_TAG"
+      - name: Verify npm registry propagation and package integrity
+        env:
+          TARBALL: ${{ steps.package.outputs.tarball }}
+        run: node scripts/verify-publication.mjs "$TARBALL"
