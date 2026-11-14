@@ -2,7 +2,7 @@ import { appendFile } from "node:fs/promises";
 import { packageMetadata } from "./lib.mjs";
 import { releaseInfo } from "./release-info.mjs";
 
-const info = releaseInfo(await packageMetadata(), {
+const info = releaseInfo(await packageMetadata(process.env.PACKAGE_ROOT), {
   tag: process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME,
   refType: process.env.RELEASE_TAG ? "tag" : process.env.GITHUB_REF_TYPE,
   repository: process.env.GITHUB_REPOSITORY,

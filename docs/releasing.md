@@ -58,10 +58,10 @@ Stable versions use `latest`; prereleases use `next`. A retry skips an existing 
 
 ## Recovering a failed publication
 
-Fix the issue first, then rerun the failed workflow run. To revalidate and retry a release tag manually:
+Fix the issue first. For code or validation fixes, dispatch `publish.yml` from `main` and pass the existing Release Please tag. The workflow validates using its current guard and loads package metadata and release contents from the selected tag:
 
 ```sh
-gh workflow run publish.yml --repo Alfian57/my-bahasa-gweh --ref v0.4.1
+gh workflow run publish.yml --repo Alfian57/my-bahasa-gweh --ref main -f release_tag=my-bahasa-gweh-v0.5.0
 ```
 
-Dispatch must target an existing tag matching `package.json`; branch refs fail validation. The retry reruns CI and reuses the same tarball integrity guard. Do not move tags, run `npm version`, or publish from a local machine.
+The retry validates the tag against package metadata at that tag, reruns CI, and reuses the same tarball integrity guard. Branch refs and mismatched tags fail validation. Do not move tags, run `npm version`, or publish from a local machine.
