@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { packageMetadata } from "../scripts/lib.mjs";
 import { releaseInfo } from "../scripts/release-info.mjs";
 import { publicationNeeded } from "../scripts/publication-state.mjs";
 import { verifyPublishedVersion } from "../scripts/verify-publication.mjs";
@@ -22,7 +25,7 @@ const releaseManifest = JSON.parse(
   ),
 );
 const source = {
-  tag: `v${metadata.version}`,
+  tag: `${metadata.name}-v${metadata.version}`,
   refType: "tag",
   repository: "Alfian57/my-bahasa-gweh",
 };
@@ -30,7 +33,15 @@ const source = {
 test("Release Please config and manifest match package metadata", () => {
   assert.equal(releaseConfig["release-type"], "node");
   assert.equal(releaseConfig.packages["."]["package-name"], metadata.name);
+  assert.equal(releaseConfig["include-component-in-tag"], true);
   assert.equal(releaseManifest["."], metadata.version);
+});
+
+test("release verification can read package metadata from a selected immutable tag checkout", async (t) => {
+  const packageRoot = await mkdtemp(path.join(os.tmpdir(), "my-bahasa-release-source-"));
+  t.after(() => rm(packageRoot, { recursive: true, force: true }));
+  await writeFile(path.join(packageRoot, "package.json"), '{"name":"tagged-version"}\n');
+  assert.deepEqual(await packageMetadata(packageRoot), { name: "tagged-version" });
 });
 
 test("local release scripts and version hooks are removed", () => {
@@ -51,14 +62,18 @@ test("stable releases select latest and prereleases select next", () => {
   });
   const prerelease = { ...metadata, version: "1.0.0-beta.2" };
   assert.equal(
-    releaseInfo(prerelease, { ...source, tag: "v1.0.0-beta.2" }).distTag,
+    releaseInfo(prerelease, {
+      ...source,
+      tag: `${prerelease.name}-v1.0.0-beta.2`,
+    }).distTag,
     "next",
   );
 });
 
 for (const [label, override] of [
   ["a branch ref", { refType: "branch" }],
-  ["an unmatched tag", { tag: "v9.9.9" }],
+  ["an unprefixed tag", { tag: `v${metadata.version}` }],
+  ["an unmatched tag", { tag: `${metadata.name}-v9.9.9` }],
   ["a different repository", { repository: "someone-else/my-bahasa-gweh" }],
 ]) {
   test(`release guard rejects ${label}`, () => {
@@ -82,7 +97,7 @@ for (const [label, override] of [
     assert.throws(() =>
       releaseInfo(changed, {
         ...source,
-        tag: `v${changed.version ?? metadata.version}`,
+        tag: `${metadata.name}-v${changed.version ?? metadata.version}`,
       }),
     );
   });
@@ -199,6 +214,8 @@ test("release workflow uses main pushes, App auth, Release Please and OIDC", asy
   ).replace(/\r\n/gu, "\n");
   assert.match(workflow, /push:\n\s+branches: \[main\]/u);
   assert.match(workflow, /workflow_dispatch:/u);
+  assert.match(workflow, /release_tag:\n\s+description: Existing Release Please tag/u);
+  assert.match(workflow, /PACKAGE_ROOT: \$\{\{ github\.workspace \}\}\/release-source/u);
   assert.doesNotMatch(workflow, /tags:\s*\n\s+- ['"]?v\*/u);
   assert.match(workflow, /actions\/create-github-app-token@/u);
   assert.match(workflow, /googleapis\/release-please-action@/u);

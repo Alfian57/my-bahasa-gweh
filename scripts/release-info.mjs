@@ -17,8 +17,9 @@ export function releaseInfo(metadata, { tag, refType, repository }) {
       "Numeric prerelease identifiers must not contain leading zeroes.",
     );
   }
-  if (refType !== "tag" || tag !== `v${version}`) {
-    throw new Error(`Release must run from the exact tag v${version}.`);
+  const expectedTag = `${metadata.name}-v${version}`;
+  if (refType !== "tag" || tag !== expectedTag) {
+    throw new Error(`Release must run from the exact tag ${expectedTag}.`);
   }
   const expectedRepository = `git+https://github.com/${repository}.git`;
   if (!repository || metadata.repository?.url !== expectedRepository) {
